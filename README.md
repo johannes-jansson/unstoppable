@@ -2,7 +2,7 @@
 
 ![Picture of the current prototype](https://i.imgur.com/EtjV4e9.jpg)
 
-Every morning, I need to pieces of information. 
+Every morning, I need two pieces of information. 
 Will it rain today? 
 And are there delays in public transport? 
 This is my solution to not have to look at my phone to get them, and therefore become unstoppable. 
