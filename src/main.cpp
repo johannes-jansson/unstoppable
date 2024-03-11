@@ -16,12 +16,12 @@ String trafficURL = "https://www.skanetrafiken.se/gw-tps/api/v2/Journey?fromPoin
 
 int precipitation = -2;
 int deviation;
-int precipitation_treshold = 1;
+int precipitation_threshold = 1;
 unsigned long timer;
 
 // Go through every hour of current day, and if precipitation is ever greater
-// than treshold, return 1. If not, return 0.
-int parsePrecipitation(String jsonString, int treshold) {
+// than threshold, return 1. If not, return 0.
+int parsePrecipitation(String jsonString, int threshold) {
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, jsonString);
   if (err) {
@@ -31,7 +31,7 @@ int parsePrecipitation(String jsonString, int treshold) {
   }
   JsonArray hourly = doc["weather"][0]["hourly"];
   for (int i = 0; i < hourly.size(); i++) {
-    if (hourly[i]["precipMM"] > treshold) {
+    if (hourly[i]["precipMM"] > threshold) {
       return 1;
     }
   }
@@ -117,7 +117,7 @@ void update() {
   // Fetch and parse weather only once, since it doesn't change that rapidly
   if (precipitation == -2) {
     String weatherPayload = httpsGETRequest(weatherURL);
-    precipitation = parsePrecipitation(weatherPayload, precipitation_treshold);
+    precipitation = parsePrecipitation(weatherPayload, precipitation_threshold);
     if (precipitation > 0) {
       digitalWrite(YELLOW_PIN,HIGH);
     }
@@ -169,108 +169,3 @@ void loop() {
   // Wait three minutes
   delay(3 * 60 * 1000);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// String getValue(HTTPClient &https, String key, int skip, int get) {
-//   bool found = false, look = false;
-//   int ind = 0;
-//   String ret_str = "";
-// 
-//   int len = https.getSize();
-//   char char_buff[1];
-//   WiFiClient * stream = https.getStreamPtr();
-//   while (https.connected() && (len > 0 || len == -1)) {
-//     size_t size = stream->available();
-//     if (size) {
-//       int c = stream->readBytes(char_buff, ((size > sizeof(char_buff)) ? sizeof(char_buff) : size));
-//       if (len > 0)
-//         len -= c;
-//       if (found) {
-//         if (skip == 0) {
-//           ret_str += char_buff[0];
-//           get --;
-//         } else
-//           skip --;
-//         if (get <= 0)
-//           break;
-//       }
-//       else if ((!look) && (char_buff[0] == key[0])) {
-//         look = true;
-//         ind = 1;
-//       } else if (look && (char_buff[0] == key[ind])) {
-//         ind ++;
-//         if (ind == key.length()) found = true;
-//       } else if (look && (char_buff[0] != key[ind])) {
-//         ind = 0;
-//         look = false;
-//       }
-//     }
-//   }
-//   return ret_str;
-// }
-//
-// String httpGETRequest(String endpoint) {
-//   WiFiClient client;
-//   HTTPClient http;
-// 
-//   http.begin(client, endpoint.c_str());
-//   int httpResponseCode = http.GET();
-// 
-//   String payload = "{}";
-//   if (httpResponseCode>0) {
-//     Serial.print("HTTP Response code: ");
-//     Serial.println(httpResponseCode);
-//     payload = http.getString();
-//   } else {
-//     Serial.print("Error code: ");
-//     Serial.println(httpResponseCode);
-//   }
-// 
-//   http.end();
-//   Serial.println(payload);
-//   return payload;
-// }
-//
-// String weatherURLOld = "https://api.open-meteo.com/v1/forecast?latitude=56.1591&longitude=13.7664&daily=precipitation_sum&timezone=Europe%2FBerlin&forecast_days=1";
-// int parsePrecipitationOld(String jsonString) {
-//   JsonDocument doc;
-//   DeserializationError err = deserializeJson(doc, jsonString);
-//   if (err) {
-//     Serial.print("Deserialization failed!");
-//     Serial.println(err.f_str());
-//     return -1;
-//   }
-//   double p = doc["daily"]["precipitation_sum"][0];
-//   Serial.print("Precipitation: ");
-//   Serial.println(p);
-//   if (p >= 5) {
-//     return 1;
-//   }
-//   return 0;
-// }
