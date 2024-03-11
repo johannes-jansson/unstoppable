@@ -3,14 +3,10 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <WiFiClientSecure.h>
-// https://github.com/espressif/arduino-esp32/blob/master/libraries/HTTPClient/examples/BasicHttpsClient/BasicHttpsClient.ino
-// https://randomnerdtutorials.com/esp32-https-requests/#esp32-https-requests-httpclient
 
 #define GREEN_PIN 13
 #define YELLOW_PIN 12
 #define RED_PIN 14
-
-unsigned long long uS_TO_S_FACTOR = 1000000;
 
 const char* ssid     = "The Promised LAN";       
 const char* password = ""; 
@@ -18,12 +14,14 @@ const char* password = "";
 String weatherURL = "https://wttr.in/H%C3%A4ssleholm?format=j1";
 String trafficURL = "https://www.skanetrafiken.se/gw-tps/api/v2/Journey?fromPointId=9021012093070000&fromPointType=STOP_AREA&toPointId=9021012080040000&toPointType=STOP_AREA&arrival=false&priority=SHORTEST_TIME&journeysAfter=1&walkSpeed=NORMAL&maxWalkDistance=2000&allowWalkToOtherStop=true";
 
-int precipitation;
+int precipitation = -2;
 int deviation;
+int precipitation_treshold = 1;
+unsigned long timer;
 
-int parsePrecipitation(String jsonString) {
-  // Go through every hour of current day, and if precipitation is ever greater
-  // than zero, return 1. If not, return 0.
+// Go through every hour of current day, and if precipitation is ever greater
+// than treshold, return 1. If not, return 0.
+int parsePrecipitation(String jsonString, int treshold) {
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, jsonString);
   if (err) {
@@ -32,19 +30,17 @@ int parsePrecipitation(String jsonString) {
     return -1;
   }
   JsonArray hourly = doc["weather"][0]["hourly"];
-  // Serial.print("Number of hours: ");
-  // Serial.println(hourly.size());
   for (int i = 0; i < hourly.size(); i++) {
-    if (hourly[i]["precipMM"] > 0) {
+    if (hourly[i]["precipMM"] > treshold) {
       return 1;
     }
   }
   return 0;
 }
 
+// Go through every journey in the result, and if there are any deviations,
+// return 1. If not, return 0. If no journeys are found, return -1.
 int parseTraffic(String jsonString) {
-  // Go through every journey in the result, and if there are any deviations,
-  // return 1. If not, return 0. If no journeys are found, return -1.
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, jsonString);
   if (err) {
@@ -68,6 +64,7 @@ int parseTraffic(String jsonString) {
   return 0;
 }
 
+// Make a https-request and return the payload as a string
 String httpsGETRequest(String endpoint) {
   String payload = "{}";
   WiFiClientSecure *client = new WiFiClientSecure;
@@ -116,24 +113,23 @@ void setupWiFi() {
 }
 
 void update() {
-  digitalWrite(GREEN_PIN,LOW);
-  setupWiFi();
-  String weatherPayload = httpsGETRequest(weatherURL);
-  precipitation = parsePrecipitation(weatherPayload);
+  digitalWrite(GREEN_PIN, LOW);
+  // Fetch and parse weather only once, since it doesn't change that rapidly
+  if (precipitation == -2) {
+    String weatherPayload = httpsGETRequest(weatherURL);
+    precipitation = parsePrecipitation(weatherPayload, precipitation_treshold);
+    if (precipitation > 0) {
+      digitalWrite(YELLOW_PIN,HIGH);
+    }
+  }
+
+  // Fetch and parse traffic on each update
   String trafficPayload = httpsGETRequest(trafficURL);
   deviation = parseTraffic(trafficPayload);
 
-  // Serial.print("Precipitation: ");
-  // Serial.println(precipitation);
-  // Serial.print("Deviations: ");
-  // Serial.println(deviation);
-
-  digitalWrite(GREEN_PIN,HIGH);
-  if (precipitation > 0) {
-    digitalWrite(YELLOW_PIN,HIGH);
-  }
+  digitalWrite(GREEN_PIN, HIGH);
   if (deviation > 0) {
-    digitalWrite(RED_PIN,HIGH);
+    digitalWrite(RED_PIN, HIGH);
   }
   if (precipitation < 0 || deviation < 0) {
     digitalWrite(GREEN_PIN,LOW);
@@ -142,6 +138,10 @@ void update() {
 
 
 void setup() {
+  // Prepare the timer
+  timer = millis();
+
+  // Prepare hardware pins
   pinMode(GREEN_PIN, OUTPUT);
   pinMode(YELLOW_PIN, OUTPUT);
   pinMode(RED_PIN, OUTPUT);
@@ -149,17 +149,25 @@ void setup() {
   digitalWrite(YELLOW_PIN,LOW);
   digitalWrite(RED_PIN,LOW);
   
+  // Prepare serial comms
   Serial.begin(115200);         
   delay(10);
-  // delay(5000);
+  delay(5000);
   Serial.println('\n');
+
+  // Prepare wifi
+  setupWiFi();
 }
 
 void loop() {
+  // After an hour in the loop, sleep forever (= wake up only on reset button)
+  if (millis() - timer > 60 * 60 * 1000) {
+    Serial.flush();
+    esp_deep_sleep_start();
+  }
   update();
-  esp_sleep_enable_timer_wakeup(60 * uS_TO_S_FACTOR);
-  Serial.flush();
-  esp_light_sleep_start();
+  // Wait three minutes
+  delay(3 * 60 * 1000);
 }
 
 
